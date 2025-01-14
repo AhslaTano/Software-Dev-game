@@ -1,2 +1,2 @@
 # Software-Dev-game
-Game project for software development 2
+Senior Software Engineering Project: Trionimos (Game Project)
