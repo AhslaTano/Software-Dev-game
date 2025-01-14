@@ -1,0 +1,188 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class Tiles : MonoBehaviour
+{
+    public class Triomino
+    {
+        public string Top { get; set; }
+        public string Left { get; set; }
+        public string Right { get; set; }
+    }
+    private List<Triomino> tiles = new List<Triomino>(); // list of all 56 triominos
+    private List<Triomino> player1_hand = new List<Triomino>(); // player 1 hand
+    private List<Triomino> player2_hand = new List<Triomino>(); // computer/player 2 hand
+    private List<Triomino> board = new List<Triomino>(); // placed tiles on the board
+    private int maxDrawAttempts = 3; // maximum draws allowed from the "well"
+    void Start()
+    {
+        InitializeTiles();
+
+        DealHand(player1_hand);
+        DealHand(player2_hand);
+
+        Debug.Log($"Player 1 Hand: {HandToString(player1_hand)}");
+        Debug.Log($"Player 2 Hand: {HandToString(player2_hand)}");
+    }
+
+    private void DealHand(List<Triomino> playerHand)
+    {
+        for (int i = 0; i < 8; i++) // 8 for a full hand
+        {
+            if (tiles.Count == 0)
+            {
+                Debug.LogWarning("No more tiles to deal!");
+                break;
+            }
+
+            int randomIndex = UnityEngine.Random.Range(0, tiles.Count);
+            playerHand.Add(tiles[randomIndex]);
+            tiles.RemoveAt(randomIndex);
+        }
+    }
+
+    private string HandToString(List<Triomino> hand)
+    {
+        string result = "";
+        foreach (var tile in hand)
+        {
+            result += $"[{tile.Left}, {tile.Top}, {tile.Right}] ";
+        }
+        return result;
+    }
+    public void PlaceTiles(Triomino selectedTile, List<Triomino> playerHand) 
+    {
+        // Check if the selected tile can be placed on the board
+        if (IsValidMove(selectedTile))
+        {
+            // Place the tile on the board
+            board.Add(selectedTile);
+            playerHand.Remove(selectedTile);
+
+            Debug.Log($"Placed tile: [{selectedTile.Left}, {selectedTile.Top}, {selectedTile.Right}]");
+        }
+        else
+        {
+            Debug.LogWarning("Invalid move. This tile cannot be placed.");
+        }
+    }
+
+    public void DrawFromWell(List<Triomino> playerHand)
+    {
+        int drawCount = 0;
+
+        while (drawCount < maxDrawAttempts)
+        {
+            if (tiles.Count == 0)
+            {
+                Debug.LogWarning("The well is empty! No tiles to draw.");
+                break;
+            }
+
+            // Draw a tile from the well
+            int randomIndex = UnityEngine.Random.Range(0, tiles.Count);
+            Triomino drawnTile = tiles[randomIndex];
+            tiles.RemoveAt(randomIndex);
+            playerHand.Add(drawnTile);
+            drawCount++;
+
+            Debug.Log($"Drew tile: [{drawnTile.Left}, {drawnTile.Top}, {drawnTile.Right}]");
+
+            // Check if the new tile creates a valid move
+            if (IsValidMove(drawnTile))
+            {
+                Debug.Log("Valid move found after drawing.");
+                return; // End the drawing process
+            }
+        }
+
+        Debug.Log("No valid moves available after drawing. Ending turn.");
+    }
+
+    private bool IsValidMove(Triomino tile)
+    {
+        // Example logic: Check if the tile matches any adjacent tiles on the board
+        // You can add more complex validation rules based on your game's rules
+        if (board.Count == 0)
+        {
+            // First move: Any tile is valid
+            return true;
+        }
+
+        foreach (Triomino placedTile in board)
+        {
+            // Simplified check for a match
+            if (tile.Left == placedTile.Right || tile.Top == placedTile.Top || tile.Right == placedTile.Left)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public void InitializeTiles()
+    {
+        // Triples
+        tiles[56] = new Triomino { Left = "5", Top = "5", Right = "5" };
+        tiles[55] = new Triomino { Left = "4", Top = "4", Right = "4" };
+        tiles[54] = new Triomino { Left = "3", Top = "3", Right = "3" };
+        tiles[53] = new Triomino { Left = "2", Top = "2", Right = "2" };
+        tiles[52] = new Triomino { Left = "1", Top = "1", Right = "1" };
+        tiles[51] = new Triomino { Left = "0", Top = "0", Right = "0" };
+        // Doubles
+        tiles[1] = new Triomino { Left = "4", Top = "5", Right = "5" };
+        tiles[2] = new Triomino { Left = "3", Top = "5", Right = "5" };
+        tiles[3] = new Triomino { Left = "2", Top = "5", Right = "5" };
+        tiles[4] = new Triomino { Left = "1", Top = "5", Right = "5" };
+        tiles[5] = new Triomino { Left = "0", Top = "5", Right = "5" };
+        tiles[6] = new Triomino { Left = "4", Top = "4", Right = "5" };
+        tiles[7] = new Triomino { Left = "3", Top = "4", Right = "4" };
+        tiles[8] = new Triomino { Left = "2", Top = "4", Right = "4" };
+        tiles[9] = new Triomino { Left = "1", Top = "4", Right = "4" };
+        tiles[10] = new Triomino { Left = "0", Top = "4", Right = "4" };
+        tiles[11] = new Triomino { Left = "3", Top = "3", Right = "5" };
+        tiles[12] = new Triomino { Left = "3", Top = "3", Right = "4" };
+        tiles[13] = new Triomino { Left = "2", Top = "3", Right = "3" };
+        tiles[14] = new Triomino { Left = "1", Top = "3", Right = "3" };
+        tiles[15] = new Triomino { Left = "0", Top = "3", Right = "3" };
+        tiles[16] = new Triomino { Left = "2", Top = "2", Right = "5" };
+        tiles[17] = new Triomino { Left = "2", Top = "2", Right = "4" };
+        tiles[18] = new Triomino { Left = "2", Top = "2", Right = "3" };
+        tiles[19] = new Triomino { Left = "1", Top = "2", Right = "2" };
+        tiles[20] = new Triomino { Left = "0", Top = "2", Right = "2" };
+        tiles[21] = new Triomino { Left = "1", Top = "1", Right = "5" };
+        tiles[22] = new Triomino { Left = "1", Top = "1", Right = "4" };
+        tiles[23] = new Triomino { Left = "1", Top = "1", Right = "3" };
+        tiles[24] = new Triomino { Left = "1", Top = "1", Right = "2" };
+        tiles[25] = new Triomino { Left = "0", Top = "1", Right = "1" };
+        tiles[26] = new Triomino { Left = "0", Top = "0", Right = "5" };
+        tiles[27] = new Triomino { Left = "0", Top = "0", Right = "4" };
+        tiles[28] = new Triomino { Left = "0", Top = "0", Right = "3" };
+        tiles[29] = new Triomino { Left = "0", Top = "0", Right = "2" };
+        tiles[30] = new Triomino { Left = "0", Top = "0", Right = "1" };
+        // Singles
+        tiles[31] = new Triomino { Left = "3", Top = "4", Right = "5" };
+        tiles[32] = new Triomino { Left = "2", Top = "4", Right = "5" };
+        tiles[33] = new Triomino { Left = "1", Top = "4", Right = "5" };
+        tiles[34] = new Triomino { Left = "0", Top = "4", Right = "5" };
+        tiles[35] = new Triomino { Left = "2", Top = "3", Right = "5" };
+        tiles[36] = new Triomino { Left = "1", Top = "3", Right = "5" };
+        tiles[37] = new Triomino { Left = "0", Top = "3", Right = "5" };
+        tiles[38] = new Triomino { Left = "2", Top = "3", Right = "4" };
+        tiles[39] = new Triomino { Left = "1", Top = "3", Right = "4" };
+        tiles[40] = new Triomino { Left = "0", Top = "3", Right = "4" };
+        tiles[41] = new Triomino { Left = "1", Top = "2", Right = "5" };
+        tiles[42] = new Triomino { Left = "0", Top = "2", Right = "5" };
+        tiles[43] = new Triomino { Left = "0", Top = "1", Right = "5" };
+        tiles[44] = new Triomino { Left = "1", Top = "2", Right = "4" };
+        tiles[45] = new Triomino { Left = "0", Top = "2", Right = "4" };
+        tiles[46] = new Triomino { Left = "0", Top = "1", Right = "4" };
+        tiles[47] = new Triomino { Left = "1", Top = "2", Right = "3" };
+        tiles[48] = new Triomino { Left = "0", Top = "2", Right = "3" };
+        tiles[49] = new Triomino { Left = "0", Top = "1", Right = "3" };
+        tiles[50] = new Triomino { Left = "0", Top = "1", Right = "2" };
+    }
+}
