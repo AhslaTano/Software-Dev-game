@@ -3,21 +3,16 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 
 
 public class Tiles : MonoBehaviour
 {
     public static Tiles Instance;
-    public class Triomino
-    {
-        public string Top { get; set; }
-        public string Left { get; set; }
-        public string Right { get; set; }
-        public GameObject TileObject { get; set; } // Reference to the Unity GameObject
-    }
-    private List<Triomino> tiles = new List<Triomino>(); // list of all 56 triominos
-    private List<Triomino> player1_hand = new List<Triomino>(); // player 1 hand
-    private List<Triomino> player2_hand = new List<Triomino>(); // computer/player 2 hand
+    
+    private List<Triomino> tiles = new List<Triomino>(55); // list of all 56 triominos
+    private List<Triomino> player1_hand = new List<Triomino>(8); // player 1 hand
+    private List<Triomino> player2_hand = new List<Triomino>(8); // computer/player 2 hand
     private List<Triomino> board = new List<Triomino>(); // placed tiles on the board
     private int maxDrawAttempts = 3; // maximum draws allowed from the "well"
     private Triomino selectedTile; // Currently selected tile
@@ -26,37 +21,67 @@ public class Tiles : MonoBehaviour
     public Transform boardTransform; // Reference to the board's transform for snapping tiles
     internal bool IsDragging; // Bool check for dragging tile
     [Header("Flicker Effect")]
-    [SerializeField] private Color validColor = Color.white; // Color to flicker to valid color
-    [SerializeField] private Color invalidColor = Color.white; // Color to flicker to invalid color
+    [SerializeField] private Color validColor = Color.green; // Color to flicker to valid color
+    [SerializeField] private Color invalidColor = Color.red; // Color to flicker to invalid color
     [SerializeField] private float flickerDuration = 0.1f; // Duration of each flicker
     [SerializeField] private int flickerCount = 3; // Number of flickers
-    private MeshRenderer meshRenderer; // Reference to the enemy's mesh renderer
-    private Material material; // Material of the MeshRenderer
+    private SpriteRenderer spriteRenderer;  // Reference to the tile's sprite renderer
+    //private MeshRenderer meshRenderer; // Reference to the tile's mesh renderer
+    //private Material material; // Material of the MeshRenderer
     private Color originalColor; // Store the original color of the material
 
     public object SelectedTile { get; internal set; }
+
+    public class Triomino
+    {
+        public string Top { get; set; }  // Top value of the tile
+        public string Left { get; set; } // Left value of the tile
+        public string Right { get; set; } // Right value of the tile
+        public GameObject TileObject { get; set; } // Reference to the Unity GameObject representing the tile
+
+        // Update text components on the GameObject to match the Triomino values
+        public void UpdateTileText()
+        {
+            if (TileObject != null)
+            {
+                // Attempt to find text components for each side of the tile
+                var topText = TileObject.transform.Find("TopText")?.GetComponent<TextMeshProUGUI>();
+                var leftText = TileObject.transform.Find("LeftText")?.GetComponent<TextMeshProUGUI>();
+                var rightText = TileObject.transform.Find("RightText")?.GetComponent<TextMeshProUGUI>();
+
+                if (topText != null) topText.text = Top;
+                if (leftText != null) leftText.text = Left;
+                if (rightText != null) rightText.text = Right;
+            }
+            else
+            {
+                Debug.LogWarning("TileObject is not assigned for this Triomino.");
+            }
+        }
+    }
 
     private void Awake()
     {
         if (Instance == null)
         {
             Instance = this;
-            DontDestroyOnLoad(gameObject);
+            //DontDestroyOnLoad(gameObject);
         }
         else
         {
-            Destroy(gameObject);
+            //Destroy(gameObject);
         }
-        // Get the MeshRenderer and its material
-        meshRenderer = GetComponent<MeshRenderer>();
-        if (meshRenderer != null)
+        // Get the SpriteRenderer and its material
+        spriteRenderer = GetComponent<SpriteRenderer>();
+        //meshRenderer = GetComponent<MeshRenderer>();
+        if (spriteRenderer != null)
         {
-            material = meshRenderer.material;
-            originalColor = material.color; // Store the original color
+            //material = meshRenderer.material;
+            originalColor = Color.white; // Store the original color
         }
         else
         {
-            Debug.LogWarning("MeshRenderer not found on " + gameObject.name);
+            Debug.LogWarning("SpriteRenderer not found on " + gameObject.name);
         }
     }
 
@@ -76,11 +101,11 @@ public class Tiles : MonoBehaviour
         for (int i = 0; i < flickerCount; i++)
         {
             // Change to damage color
-            material.color = validColor;
+            spriteRenderer.color = validColor;
             yield return new WaitForSeconds(flickerDuration);
 
             // Reset to original color
-            material.color = originalColor;
+            spriteRenderer.color = originalColor;
             yield return new WaitForSeconds(flickerDuration);
         }
     }
@@ -90,13 +115,22 @@ public class Tiles : MonoBehaviour
         for (int i = 0; i < flickerCount; i++)
         {
             // Change to damage color
-            material.color = invalidColor;
+            spriteRenderer.color = invalidColor;
             yield return new WaitForSeconds(flickerDuration);
 
             // Reset to original color
-            material.color = originalColor;
+            spriteRenderer.color = originalColor;
             yield return new WaitForSeconds(flickerDuration);
         }
+    }
+
+    public void PlayOrder(List<Triomino> playerHand)
+    {
+
+        int randomIndex = UnityEngine.Random.Range(50, tiles.Count);
+        playerHand.Add(tiles[randomIndex]);
+        tiles.RemoveAt(randomIndex);
+        // Needs to return tile to something so can compare to determine play order
     }
 
     public void DealHand(List<Triomino> playerHand)
@@ -247,65 +281,64 @@ public class Tiles : MonoBehaviour
 
     public void InitializeTiles()
     {
-        // Triples
-        tiles[56] = new Triomino { Left = "5", Top = "5", Right = "5" };
-        tiles[55] = new Triomino { Left = "4", Top = "4", Right = "4" };
-        tiles[54] = new Triomino { Left = "3", Top = "3", Right = "3" };
-        tiles[53] = new Triomino { Left = "2", Top = "2", Right = "2" };
-        tiles[52] = new Triomino { Left = "1", Top = "1", Right = "1" };
-        tiles[51] = new Triomino { Left = "0", Top = "0", Right = "0" };
         // Doubles
-        tiles[1] = new Triomino { Left = "4", Top = "5", Right = "5" };
-        tiles[2] = new Triomino { Left = "3", Top = "5", Right = "5" };
-        tiles[3] = new Triomino { Left = "2", Top = "5", Right = "5" };
-        tiles[4] = new Triomino { Left = "1", Top = "5", Right = "5" };
-        tiles[5] = new Triomino { Left = "0", Top = "5", Right = "5" };
-        tiles[6] = new Triomino { Left = "4", Top = "4", Right = "5" };
-        tiles[7] = new Triomino { Left = "3", Top = "4", Right = "4" };
-        tiles[8] = new Triomino { Left = "2", Top = "4", Right = "4" };
-        tiles[9] = new Triomino { Left = "1", Top = "4", Right = "4" };
-        tiles[10] = new Triomino { Left = "0", Top = "4", Right = "4" };
-        tiles[11] = new Triomino { Left = "3", Top = "3", Right = "5" };
-        tiles[12] = new Triomino { Left = "3", Top = "3", Right = "4" };
-        tiles[13] = new Triomino { Left = "2", Top = "3", Right = "3" };
-        tiles[14] = new Triomino { Left = "1", Top = "3", Right = "3" };
-        tiles[15] = new Triomino { Left = "0", Top = "3", Right = "3" };
-        tiles[16] = new Triomino { Left = "2", Top = "2", Right = "5" };
-        tiles[17] = new Triomino { Left = "2", Top = "2", Right = "4" };
-        tiles[18] = new Triomino { Left = "2", Top = "2", Right = "3" };
-        tiles[19] = new Triomino { Left = "1", Top = "2", Right = "2" };
-        tiles[20] = new Triomino { Left = "0", Top = "2", Right = "2" };
-        tiles[21] = new Triomino { Left = "1", Top = "1", Right = "5" };
-        tiles[22] = new Triomino { Left = "1", Top = "1", Right = "4" };
-        tiles[23] = new Triomino { Left = "1", Top = "1", Right = "3" };
-        tiles[24] = new Triomino { Left = "1", Top = "1", Right = "2" };
-        tiles[25] = new Triomino { Left = "0", Top = "1", Right = "1" };
-        tiles[26] = new Triomino { Left = "0", Top = "0", Right = "5" };
-        tiles[27] = new Triomino { Left = "0", Top = "0", Right = "4" };
-        tiles[28] = new Triomino { Left = "0", Top = "0", Right = "3" };
-        tiles[29] = new Triomino { Left = "0", Top = "0", Right = "2" };
-        tiles[30] = new Triomino { Left = "0", Top = "0", Right = "1" };
+        tiles.Add(new Triomino { Left = "4", Top = "5", Right = "5" });
+        tiles.Add(new Triomino { Left = "3", Top = "5", Right = "5" });
+        tiles.Add(new Triomino { Left = "2", Top = "5", Right = "5" });
+        tiles.Add(new Triomino { Left = "1", Top = "5", Right = "5" });
+        tiles.Add(new Triomino { Left = "0", Top = "5", Right = "5" });
+        tiles.Add(new Triomino { Left = "4", Top = "4", Right = "5" });
+        tiles.Add(new Triomino { Left = "3", Top = "4", Right = "4" });
+        tiles.Add(new Triomino { Left = "2", Top = "4", Right = "4" });
+        tiles.Add(new Triomino { Left = "1", Top = "4", Right = "4" });
+        tiles.Add(new Triomino { Left = "0", Top = "4", Right = "4" });
+        tiles.Add(new Triomino { Left = "3", Top = "3", Right = "5" });
+        tiles.Add(new Triomino { Left = "3", Top = "3", Right = "4" });
+        tiles.Add(new Triomino { Left = "2", Top = "3", Right = "3" });
+        tiles.Add(new Triomino { Left = "1", Top = "3", Right = "3" });
+        tiles.Add(new Triomino { Left = "0", Top = "3", Right = "3" });
+        tiles.Add(new Triomino { Left = "2", Top = "2", Right = "5" });
+        tiles.Add(new Triomino { Left = "2", Top = "2", Right = "4" });
+        tiles.Add(new Triomino { Left = "2", Top = "2", Right = "3" });
+        tiles.Add(new Triomino { Left = "1", Top = "2", Right = "2" });
+        tiles.Add(new Triomino { Left = "0", Top = "2", Right = "2" });
+        tiles.Add(new Triomino { Left = "1", Top = "1", Right = "5" });
+        tiles.Add(new Triomino { Left = "1", Top = "1", Right = "4" });
+        tiles.Add(new Triomino { Left = "1", Top = "1", Right = "3" });
+        tiles.Add(new Triomino { Left = "1", Top = "1", Right = "2" });
+        tiles.Add(new Triomino { Left = "0", Top = "1", Right = "1" });
+        tiles.Add(new Triomino { Left = "0", Top = "0", Right = "5" });
+        tiles.Add(new Triomino { Left = "0", Top = "0", Right = "4" });
+        tiles.Add(new Triomino { Left = "0", Top = "0", Right = "3" });
+        tiles.Add(new Triomino { Left = "0", Top = "0", Right = "2" });
+        tiles.Add(new Triomino { Left = "0", Top = "0", Right = "1" });
         // Singles
-        tiles[31] = new Triomino { Left = "3", Top = "4", Right = "5" };
-        tiles[32] = new Triomino { Left = "2", Top = "4", Right = "5" };
-        tiles[33] = new Triomino { Left = "1", Top = "4", Right = "5" };
-        tiles[34] = new Triomino { Left = "0", Top = "4", Right = "5" };
-        tiles[35] = new Triomino { Left = "2", Top = "3", Right = "5" };
-        tiles[36] = new Triomino { Left = "1", Top = "3", Right = "5" };
-        tiles[37] = new Triomino { Left = "0", Top = "3", Right = "5" };
-        tiles[38] = new Triomino { Left = "2", Top = "3", Right = "4" };
-        tiles[39] = new Triomino { Left = "1", Top = "3", Right = "4" };
-        tiles[40] = new Triomino { Left = "0", Top = "3", Right = "4" };
-        tiles[41] = new Triomino { Left = "1", Top = "2", Right = "5" };
-        tiles[42] = new Triomino { Left = "0", Top = "2", Right = "5" };
-        tiles[43] = new Triomino { Left = "0", Top = "1", Right = "5" };
-        tiles[44] = new Triomino { Left = "1", Top = "2", Right = "4" };
-        tiles[45] = new Triomino { Left = "0", Top = "2", Right = "4" };
-        tiles[46] = new Triomino { Left = "0", Top = "1", Right = "4" };
-        tiles[47] = new Triomino { Left = "1", Top = "2", Right = "3" };
-        tiles[48] = new Triomino { Left = "0", Top = "2", Right = "3" };
-        tiles[49] = new Triomino { Left = "0", Top = "1", Right = "3" };
-        tiles[50] = new Triomino { Left = "0", Top = "1", Right = "2" };
+        tiles.Add(new Triomino { Left = "3", Top = "4", Right = "5" });
+        tiles.Add(new Triomino { Left = "2", Top = "4", Right = "5" });
+        tiles.Add(new Triomino { Left = "1", Top = "4", Right = "5" });
+        tiles.Add(new Triomino { Left = "0", Top = "4", Right = "5" });
+        tiles.Add(new Triomino { Left = "2", Top = "3", Right = "5" });
+        tiles.Add(new Triomino { Left = "1", Top = "3", Right = "5" });
+        tiles.Add(new Triomino { Left = "0", Top = "3", Right = "5" });
+        tiles.Add(new Triomino { Left = "2", Top = "3", Right = "4" });
+        tiles.Add(new Triomino { Left = "1", Top = "3", Right = "4" });
+        tiles.Add(new Triomino { Left = "0", Top = "3", Right = "4" });
+        tiles.Add(new Triomino { Left = "1", Top = "2", Right = "5" });
+        tiles.Add(new Triomino { Left = "0", Top = "2", Right = "5" });
+        tiles.Add(new Triomino { Left = "0", Top = "1", Right = "5" });
+        tiles.Add(new Triomino { Left = "1", Top = "2", Right = "4" });
+        tiles.Add(new Triomino { Left = "0", Top = "2", Right = "4" });
+        tiles.Add(new Triomino { Left = "0", Top = "1", Right = "4" });
+        tiles.Add(new Triomino { Left = "1", Top = "2", Right = "3" });
+        tiles.Add(new Triomino { Left = "0", Top = "2", Right = "3" });
+        tiles.Add(new Triomino { Left = "0", Top = "1", Right = "3" });
+        tiles.Add(new Triomino { Left = "0", Top = "1", Right = "2" });
+        // Triples
+        tiles.Add(new Triomino { Left = "5", Top = "5", Right = "5" });
+        tiles.Add(new Triomino { Left = "4", Top = "4", Right = "4" });
+        tiles.Add(new Triomino { Left = "3", Top = "3", Right = "3" });
+        tiles.Add(new Triomino { Left = "2", Top = "2", Right = "2" });
+        tiles.Add(new Triomino { Left = "1", Top = "1", Right = "1" });
+        tiles.Add(new Triomino { Left = "0", Top = "0", Right = "0" });
     }
 }
-
