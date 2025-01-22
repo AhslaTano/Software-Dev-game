@@ -174,14 +174,18 @@ public class Tiles : MonoBehaviour
         }
     }
 
-    public void DragTile()
-    {
-        // Update the tile's position to follow the mouse
-        Vector3 mousePosition = Input.mousePosition;
-        mousePosition.z = mainCamera.WorldToScreenPoint(selectedTile.TileObject.transform.position).z; // Maintain z-depth
-        Vector3 worldPosition = mainCamera.ScreenToWorldPoint(mousePosition);
-        selectedTile.TileObject.transform.position = new Vector3(worldPosition.x, worldPosition.y, selectedTile.TileObject.transform.position.z);
-    }
+     public void DragTile()
+ {
+     if (isDragging == false)
+     {
+         isDragging = true;
+         // Update the tile's position to follow the mouse
+         Vector3 mousePosition = Input.mousePosition;
+         mousePosition.z = mainCamera.WorldToScreenPoint(selectedTile.TileObject.transform.position).z; // Maintain z-depth
+         Vector3 worldPosition = mainCamera.ScreenToWorldPoint(mousePosition);
+         selectedTile.TileObject.transform.position = new Vector3(worldPosition.x, worldPosition.y, selectedTile.TileObject.transform.position.z);
+     }
+ }
 
     public void RotateTile()
     {
@@ -191,12 +195,11 @@ public class Tiles : MonoBehaviour
 
     public void PlaceTile()
     {
-        isDragging = false;
-
         if (selectedTile == null) return;
 
         if (IsValidMove(selectedTile))
         {
+            isDragging = false;
             ValidFlickerEffect();
             SnapToBoard(selectedTile);
             board.Add(selectedTile);
