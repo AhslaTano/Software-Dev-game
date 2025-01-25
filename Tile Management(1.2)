@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using System.Linq;
+using Unity.Burst.CompilerServices;
 
 
 public class Tiles : MonoBehaviour
@@ -19,7 +21,8 @@ public class Tiles : MonoBehaviour
     private bool isDragging = false; // Moving Selected tile
     public Camera mainCamera; // Reference to the main camera for raycasting
     public Transform boardTransform; // Reference to the board's transform for snapping tiles
-    internal bool IsDragging; // Bool check for dragging tile
+    public bool IsDragging; // Bool check for dragging tile
+    private Vector3 offset; // To track the mouse offset while dragging
     [Header("Flicker Effect")]
     [SerializeField] private Color validColor = Color.green; // Color to flicker to valid color
     [SerializeField] private Color invalidColor = Color.red; // Color to flicker to invalid color
@@ -30,13 +33,23 @@ public class Tiles : MonoBehaviour
     //private Material material; // Material of the MeshRenderer
     private Color originalColor; // Store the original color of the material
 
-    public object SelectedTile { get; internal set; }
+    public Triomino SelectedTile { get; internal set; }
+
+    //Collision
+    private float speed = 10.0f;
+    public bool free;
+    public Collider2D[] colliders; // Three colliders, one for each face
+    public Collider2D activeCollider;
+    public List<Collider2D> otherColliders = new List<Collider2D>(); // Supports multiple colliders during snapping
+    public Vector2 target;
 
     public class Triomino
     {
         public string Top { get; set; }  // Top value of the tile
         public string Left { get; set; } // Left value of the tile
         public string Right { get; set; } // Right value of the tile
+
+
         public GameObject TileObject { get; set; } // Reference to the Unity GameObject representing the tile
 
         // Update text components on the GameObject to match the Triomino values
@@ -45,9 +58,9 @@ public class Tiles : MonoBehaviour
             if (TileObject != null)
             {
                 // Attempt to find text components for each side of the tile
-                var topText = TileObject.transform.Find("TopText")?.GetComponent<TextMeshProUGUI>();
-                var leftText = TileObject.transform.Find("LeftText")?.GetComponent<TextMeshProUGUI>();
-                var rightText = TileObject.transform.Find("RightText")?.GetComponent<TextMeshProUGUI>();
+                var topText = TileObject.transform.Find("Top Text")?.GetComponent<TextMeshProUGUI>();
+                var leftText = TileObject.transform.Find("Left Text")?.GetComponent<TextMeshProUGUI>();
+                var rightText = TileObject.transform.Find("Right Text")?.GetComponent<TextMeshProUGUI>();
 
                 if (topText != null) topText.text = Top;
                 if (leftText != null) leftText.text = Left;
@@ -87,6 +100,9 @@ public class Tiles : MonoBehaviour
 
     void Start()
     {
+        activeCollider = null;
+        otherColliders.Clear();
+
         InitializeTiles();
 
         DealHand(player1_hand);
@@ -95,6 +111,124 @@ public class Tiles : MonoBehaviour
         Debug.Log($"Player 1 Hand: {HandToString(player1_hand)}");
         Debug.Log($"Player 2 Hand: {HandToString(player2_hand)}");
     }
+
+    void Update()
+    {
+        if (!isDragging && selectedTile != null)
+        {
+            //DragTile();
+            OnMouseDown();
+            OnMouseDrag();
+        }
+
+        if (Input.GetMouseButtonDown(1))
+        {
+            SelectTile();
+            RotateTile();
+        }
+
+        if (free && activeCollider != null && otherColliders.Count > 0)
+        {
+            float step = speed * Time.deltaTime;
+
+            // Move sprite towards the target location
+            Vector2 combinedOffset = Vector2.zero;
+            foreach (Collider2D col in otherColliders)
+            {
+                combinedOffset += col.offset;
+            }
+            combinedOffset /= otherColliders.Count; // Average the offset if multiple colliders
+
+            transform.position = Vector2.MoveTowards(
+                (Vector2)transform.position + activeCollider.offset,
+                target,
+                step
+            ) + combinedOffset;
+
+            if (Vector2.Distance((Vector2)transform.position + activeCollider.offset, target) < 0.01f)
+            {
+                Debug.Log("I arrived");
+                free = false;
+                activeCollider = null;
+                otherColliders.Clear();
+            }
+        }
+    }
+
+    private void OnMouseDown()
+    {
+        // Capture the offset between the mouse and the tile's position
+        Vector3 mousePosition = Input.mousePosition;
+        mousePosition.z = Camera.main.WorldToScreenPoint(transform.position).z;
+        Vector3 worldPosition = Camera.main.ScreenToWorldPoint(mousePosition);
+        offset = transform.position - worldPosition;
+
+        isDragging = true;
+    }
+
+    private void OnMouseDrag()
+    {
+        if (isDragging)
+        {
+            // Update the tile's position to follow the mouse, maintaining the offset
+            Vector3 mousePosition = Input.mousePosition;
+            mousePosition.z = Camera.main.WorldToScreenPoint(transform.position).z;
+            Vector3 worldPosition = Camera.main.ScreenToWorldPoint(mousePosition);
+            transform.position = worldPosition + offset;
+        }
+    }
+
+    private void OnMouseUp()
+    {
+        if (isDragging)
+        {
+            // Snap the tile to the nearest grid position or board
+            Vector3 snappedPosition = new Vector3(
+                Mathf.Round(transform.position.x),
+                Mathf.Round(transform.position.y),
+                transform.position.z);
+
+            transform.position = snappedPosition;
+            isDragging = false;
+
+            Debug.Log($"Tile placed at: {transform.position}");
+        }
+    }
+
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (free)
+        {
+            Debug.Log("I am free and colliding");
+
+            // Set the target to the collided object's position
+            target = (Vector2)collision.gameObject.transform.position +
+                     collision.collider.offset;
+
+            if (!otherColliders.Contains(collision.collider))
+            {
+                otherColliders.Add(collision.collider);
+            }
+
+            gameObject.GetComponent<Rigidbody2D>().bodyType = RigidbodyType2D.Kinematic;
+            ValidFlickerEffect();
+        }
+        else
+        {
+            Debug.Log("I am stationary and colliding");
+
+            // Setup the activeCollider on the other tile
+            Tile otherTile = collision.gameObject.GetComponent<Tile>();
+            if (otherTile != null && !otherTile.colliders.Contains(activeCollider))
+            {
+                otherTile.activeCollider = collision.collider;
+            }
+
+            gameObject.GetComponent<Rigidbody2D>().bodyType = RigidbodyType2D.Kinematic;
+            InvalidFlickerEffect();
+        }
+    }
+
 
     private IEnumerator ValidFlickerEffect()
     {
@@ -164,37 +298,57 @@ public class Tiles : MonoBehaviour
         Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
         if (Physics.Raycast(ray, out RaycastHit hit))
         {
-            // Check if the hit object is a tile
-            Triomino tile = hit.collider.GetComponent<Triomino>();
+            // Check if the hit object or its parent has the Triomino component
+            Triomino tile = hit.collider.GetComponentInParent<Triomino>();
             if (tile != null)
             {
                 selectedTile = tile;
                 isDragging = true;
+                Debug.Log("Tile selected: " + selectedTile);
+                return;
             }
         }
+
+        Debug.LogWarning("No tile selected under the mouse pointer.");
     }
 
-     public void DragTile()
- {
-     if (isDragging == false)
-     {
-         isDragging = true;
-         // Update the tile's position to follow the mouse
-         Vector3 mousePosition = Input.mousePosition;
-         mousePosition.z = mainCamera.WorldToScreenPoint(selectedTile.TileObject.transform.position).z; // Maintain z-depth
-         Vector3 worldPosition = mainCamera.ScreenToWorldPoint(mousePosition);
-         selectedTile.TileObject.transform.position = new Vector3(worldPosition.x, worldPosition.y, selectedTile.TileObject.transform.position.z);
-     }
- }
+    public void DragTile()
+    {
+        if (selectedTile == null)
+        {
+            Debug.LogWarning("No tile selected to drag.");
+            return;
+        }
+
+        // Update the tile's position to follow the mouse pointer
+        Vector3 mousePosition = Input.mousePosition;
+        mousePosition.z = mainCamera.WorldToScreenPoint(selectedTile.TileObject.transform.position).z; // Maintain the correct depth
+        Vector3 worldPosition = mainCamera.ScreenToWorldPoint(mousePosition);
+
+        selectedTile.TileObject.transform.position = new Vector3(
+            worldPosition.x,
+            worldPosition.y,
+            selectedTile.TileObject.transform.position.z); // Keep the original z-position
+
+        Debug.Log("Dragging tile: " + selectedTile);
+    }
 
     public void RotateTile()
     {
-        // Rotate the tile 120 degrees clockwise around its Z-axis
-        selectedTile.TileObject.transform.Rotate(0, 0, 120);
+        if (selectedTile == null)
+        {
+            Debug.LogWarning("No tile selected to rotate.");
+            return;
+        }
+
+        // Rotate the tile by 90 degrees around its local Z-axis
+        selectedTile.TileObject.transform.Rotate(0, 0, 90);
+        Debug.Log("Tile rotated: " + selectedTile);
     }
 
     public void PlaceTile()
     {
+
         if (selectedTile == null) return;
 
         if (IsValidMove(selectedTile))
