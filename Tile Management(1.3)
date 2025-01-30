@@ -1,0 +1,492 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+using System.Linq;
+using Unity.Burst.CompilerServices;
+
+
+public class Tiles : MonoBehaviour
+{
+     public static Tiles Instance;
+ 
+ private List<Triomino> tiles = new List<Triomino>(55); // list of all 56 triominos
+ private List<Triomino> player1_hand = new List<Triomino>(8); // player 1 hand
+ private List<Triomino> player2_hand = new List<Triomino>(8); // computer/player 2 hand
+ private List<Triomino> board = new List<Triomino>(); // placed tiles on the board
+ private int maxDrawAttempts = 3; // maximum draws allowed from the "well"
+ private Triomino selectedTile; // Currently selected tile
+ private bool isDragging = false; // Moving Selected tile
+ public Camera mainCamera; // Reference to the main camera for raycasting
+ public Transform boardTransform; // Reference to the board's transform for snapping tiles
+ public bool IsDragging; // Bool check for dragging tile
+ private Vector3 offset; // To track the mouse offset while dragging
+ [Header("Flicker Effect")]
+ [SerializeField] private Color validColor = Color.green; // Color to flicker to valid color
+ [SerializeField] private Color invalidColor = Color.red; // Color to flicker to invalid color
+ [SerializeField] private float flickerDuration = 0.1f; // Duration of each flicker
+ [SerializeField] private int flickerCount = 3; // Number of flickers
+ private SpriteRenderer spriteRenderer;  // Reference to the tile's sprite renderer
+ //private MeshRenderer meshRenderer; // Reference to the tile's mesh renderer
+ //private Material material; // Material of the MeshRenderer
+ private Color originalColor; // Store the original color of the material
+
+ public GameObject SelectedTile { get; internal set; }
+
+
+ //Collision
+ private float speed = 10.0f;
+ public bool free;// not collided
+ public Collider2D[] colliders; // Three colliders, one for each face
+ public Collider2D activeCollider;
+ public Collider2D otherCollider;
+ public List<Collider2D> otherColliders = new List<Collider2D>(); // Supports multiple colliders during snapping
+ public Vector2 target;
+
+ public class Triomino
+ {
+     public string Top { get; set; }  // Top value of the tile
+     public string Left { get; set; } // Left value of the tile
+     public string Right { get; set; } // Right value of the tile
+
+
+     public GameObject TileObject { get; set; } // Reference to the Unity GameObject representing the tile
+
+     // Update text components on the GameObject to match the Triomino values
+     public void UpdateTileText()
+     {
+         if (TileObject != null)
+         {
+             // Attempt to find text components for each side of the tile
+             var topText = TileObject.transform.Find("Top Text")?.GetComponent<TextMeshProUGUI>();
+             var leftText = TileObject.transform.Find("Left Text")?.GetComponent<TextMeshProUGUI>();
+             var rightText = TileObject.transform.Find("Right Text")?.GetComponent<TextMeshProUGUI>();
+
+             if (topText != null) topText.text = Top;
+             if (leftText != null) leftText.text = Left;
+             if (rightText != null) rightText.text = Right;
+         }
+         else
+         {
+             Debug.LogWarning("TileObject is not assigned for this Triomino.");
+         }
+     }
+ }
+
+ private void Awake()
+ {
+     if (Instance == null)
+     {
+         Instance = this;
+         //DontDestroyOnLoad(gameObject);
+     }
+     else
+     {
+         //Destroy(gameObject);
+     }
+     // Get the SpriteRenderer and its material
+     spriteRenderer = GetComponent<SpriteRenderer>();
+     //meshRenderer = GetComponent<MeshRenderer>();
+     if (spriteRenderer != null)
+     {
+         //material = meshRenderer.material;
+         originalColor = Color.white; // Store the original color
+     }
+     else
+     {
+         Debug.LogWarning("SpriteRenderer not found on " + gameObject.name);
+     }
+ }
+
+ void Start()
+ {
+     activeCollider = null;
+     otherCollider = null;
+     otherColliders.Clear();
+
+     DealHand(player1_hand);
+     DealHand(player2_hand);
+
+     Debug.Log($"Player 1 Hand: {HandToString(player1_hand)}");
+     Debug.Log($"Player 2 Hand: {HandToString(player2_hand)}");
+ }
+
+ void Update()
+ {
+     if (!isDragging && selectedTile != null)
+     {
+         //DragTile();
+         OnMouseDown();
+         OnMouseDrag();
+
+         if (Input.GetKeyDown(KeyCode.J)) // J key for 120 degrees left
+         {
+             RotateTriomino(120); // Rotate left
+         }
+         else if (Input.GetKeyDown(KeyCode.L)) // L key for 120 degrees right
+         {
+             RotateTriomino(-120); // Rotate right
+         }
+     }
+
+     if (Input.GetMouseButtonDown(1) && isDragging)
+     {
+         transform.Rotate(0, 0, 180);
+         //rotate tile 180
+     }
+
+     if (free && activeCollider != null && otherColliders.Count > 0)
+     {
+         float step = speed * Time.deltaTime;
+
+         // Move sprite towards the target location
+         Vector2 combinedOffset = Vector2.zero;
+         foreach (Collider2D col in otherColliders)
+         {
+             combinedOffset += col.offset;
+         }
+         combinedOffset /= otherColliders.Count; // Average the offset if multiple colliders
+
+         transform.position = Vector2.MoveTowards(
+             (Vector2)transform.position + activeCollider.offset,
+             target,
+             step
+         ) + combinedOffset;
+
+         if (Vector2.Distance((Vector2)transform.position + activeCollider.offset, target) < 0.01f)
+         {
+             Debug.Log("I arrived");
+             free = false;
+             activeCollider = null;
+             otherColliders.Clear();
+         }
+     }
+ }
+
+ private void OnMouseDown()
+ {
+     // Capture the offset between the mouse and the tile's position
+     Vector3 mousePosition = Input.mousePosition;
+     mousePosition.z = Camera.main.WorldToScreenPoint(transform.position).z;
+     Vector3 worldPosition = Camera.main.ScreenToWorldPoint(mousePosition);
+     offset = transform.position - worldPosition;
+
+     isDragging = true;
+ }
+
+ private void OnMouseDrag()
+ {
+     if (isDragging)
+     {
+         // Update the tile's position to follow the mouse, maintaining the offset
+         Vector3 mousePosition = Input.mousePosition;
+         mousePosition.z = Camera.main.WorldToScreenPoint(transform.position).z;
+         Vector3 worldPosition = Camera.main.ScreenToWorldPoint(mousePosition);
+         transform.position = worldPosition + offset;
+     }
+ }
+
+ private void OnMouseUp()
+ {
+     if (isDragging)
+     {
+         // Snap the tile to the nearest grid position or board
+         Vector3 snappedPosition = new Vector3(
+             Mathf.Round(transform.position.x),
+             Mathf.Round(transform.position.y),
+             transform.position.z);
+
+         transform.position = snappedPosition;
+         isDragging = false;
+
+         Debug.Log($"Tile placed at: {transform.position}");
+     }
+ }
+
+ // Function to rotate the Triomino by a specified amount (in degrees)
+ private void RotateTriomino(float angle)
+ {
+     transform.Rotate(0, 0, angle);  // Rotate on the Z-axis by the specified angle
+     if (angle > 0)
+     {
+         RotateLeft();
+     }
+     else
+     {
+         RotateRight();
+     }
+     //Debug.Log("M= " + middle + " L= " + left + " R= " + right);
+     //updatePips(); // This doesn't need to be here. Update pips only updates the values when loading data.
+ }
+
+ private void RotateRight() // Updates the variable values if rotating clockwise.
+ {
+     // When rotating clockwise, the middle moves to the right, the right moves to the bottom, and the left moves to the middle
+     Debug.Log("Rotating clockwise");
+     //int temp = middle;
+     //middle = left;
+     //left = right;
+     //right = temp;
+ }
+
+ private void RotateLeft() // Updates the variable values if rotating counterclockwise.
+ {
+     // When rotating counterclockwise, the middle moves to the left, the left moves to the bottom, and the right moves to the middle
+     Debug.Log("Rotating counterclockwise");
+     //int temp = middle;
+     //middle = right;
+     //right = left;
+     //left = temp;
+ }
+
+ private void OnCollisionEnter2D(Collision2D collision)
+ {
+     if (IsValidMove(selectedTile))
+     {
+         ValidFlickerEffect();
+     }
+     else
+     {
+         InvalidFlickerEffect();
+         ReturnTileToHand(selectedTile);
+     }
+
+     if (free)
+     {
+         Debug.Log("I am free and colliding");
+         target = collision.gameObject.transform.position + new Vector3(collision.collider.offset.x, collision.collider.offset.y, collision.gameObject.transform.position.z);
+         otherCollider = collision.collider;
+         gameObject.GetComponent<Rigidbody2D>().bodyType = RigidbodyType2D.Kinematic;
+     }
+     else
+     {
+         Debug.Log("I am stationary and colliding");
+         // setup the activeCollider on the other tile
+         RTile otherTile = collision.gameObject.GetComponent<RTile>();
+         otherTile.activeCollider = collision.collider;
+         gameObject.GetComponent<Rigidbody2D>().bodyType = RigidbodyType2D.Kinematic;
+     }
+ }
+
+
+ private IEnumerator ValidFlickerEffect()
+ {
+     for (int i = 0; i < flickerCount; i++)
+     {
+         // Change to damage color
+         spriteRenderer.color = validColor;
+         yield return new WaitForSeconds(flickerDuration);
+
+         // Reset to original color
+         spriteRenderer.color = originalColor;
+         yield return new WaitForSeconds(flickerDuration);
+     }
+ }
+
+ private IEnumerator InvalidFlickerEffect()
+ {
+     for (int i = 0; i < flickerCount; i++)
+     {
+         // Change to damage color
+         spriteRenderer.color = invalidColor;
+         yield return new WaitForSeconds(flickerDuration);
+
+         // Reset to original color
+         spriteRenderer.color = originalColor;
+         yield return new WaitForSeconds(flickerDuration);
+     }
+ }
+
+ public void PlayOrder(List<Triomino> playerHand)
+ {
+     // only 1 tile not full hand
+     int randomIndex = UnityEngine.Random.Range(50, tiles.Count);
+     playerHand.Add(tiles[randomIndex]);
+     tiles.RemoveAt(randomIndex);
+     // Needs to return tile to something so can compare to determine play order
+ }
+
+ public void DealHand(List<Triomino> playerHand)
+ {
+     for (int i = 0; i < 8; i++) // 8 for a full hand
+     {
+         if (tiles.Count == 0)
+         {
+             Debug.LogWarning("No more tiles to deal!");
+             break;
+         }
+
+         int randomIndex = UnityEngine.Random.Range(0, tiles.Count);
+         playerHand.Add(tiles[randomIndex]);
+         tiles.RemoveAt(randomIndex);
+     }
+ }
+
+ public string HandToString(List<Triomino> hand)
+ {
+     string result = "";
+     foreach (var tile in hand)
+     {
+         result += $"[{tile.Left}, {tile.Top}, {tile.Right}] ";
+     }
+     return result;
+ }
+ public void SelectTile()
+ {
+     // Perform a raycast to detect the tile under the mouse pointer
+     Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
+     if (Physics.Raycast(ray, out RaycastHit hit))
+     {
+         // Check if the hit object or its parent has the Triomino component
+         GameObject tile = hit.collider.GetComponentInParent<GameObject>();
+         if (tile != null)
+         {
+             SelectedTile = tile;
+             isDragging = true;
+             Debug.Log("Tile selected: " + selectedTile);
+             return;
+         }
+     }
+
+     Debug.LogWarning("No tile selected under the mouse pointer.");
+ }
+
+ public void PlaceTile()
+ {
+     isDragging = false;
+     board.Add(selectedTile);
+     player1_hand.Remove(selectedTile); // Adjust for player2_hand if necessary
+
+     selectedTile = null;
+ }
+
+ public void ReturnTileToHand(Triomino tile)
+ {
+     // Reset the tile's position to the player's hand area
+     // Example: Reset to a predefined hand position
+     tile.TileObject.transform.position = new Vector3(0, 0, 0); // Placeholder
+ }
+
+ public void DrawFromWell(List<Triomino> playerHand)
+ {
+     int drawCount = 0;
+
+     while (drawCount < maxDrawAttempts)
+     {
+         if (tiles.Count == 0)
+         {
+             Debug.LogWarning("The well is empty! No tiles to draw.");
+             break;
+         }
+
+         // Draw a tile from the well
+         int randomIndex = UnityEngine.Random.Range(0, tiles.Count);
+         Triomino drawnTile = tiles[randomIndex];
+         tiles.RemoveAt(randomIndex);
+         playerHand.Add(drawnTile);
+         drawCount++;
+
+         Debug.Log($"Drew tile: [{drawnTile.Left}, {drawnTile.Top}, {drawnTile.Right}]");
+
+         // Check if the new tile creates a valid move
+         if (IsValidMove(drawnTile))
+         {
+             Debug.Log("Valid move found after drawing.");
+             return; // End the drawing process
+         }
+     }
+
+     Debug.Log("No valid moves available after drawing. Ending turn.");
+ }
+
+ public bool IsValidMove(Triomino tile)
+ {
+     // Example logic: Check if the tile matches any adjacent tiles on the board
+     // You can add more complex validation rules based on your game's rules
+     if (board.Count == 0)
+     {
+         // First move: Any tile is valid
+         return true;
+     }
+
+     foreach (Triomino placedTile in board)
+     {
+         // Simplified check for a match
+         if (tile.Left == placedTile.Right && tile.Top == placedTile.Top
+         || tile.Top == placedTile.Top && tile.Left == placedTile.Right && tile.Right == placedTile.Left
+         || tile.Right == placedTile.Left && tile.Top == placedTile.Top)
+         {
+             Debug.Log("Tile match, can place tile here");
+             return true;
+         }
+         else { Debug.Log("Tile does not match, can not place tile here"); }
+     }
+
+     return false;
+ }
+
+    public void InitializeTiles()
+    {
+        // Doubles
+        tiles.Add(new Triomino { Left = "4", Top = "5", Right = "5" });
+        tiles.Add(new Triomino { Left = "3", Top = "5", Right = "5" });
+        tiles.Add(new Triomino { Left = "2", Top = "5", Right = "5" });
+        tiles.Add(new Triomino { Left = "1", Top = "5", Right = "5" });
+        tiles.Add(new Triomino { Left = "0", Top = "5", Right = "5" });
+        tiles.Add(new Triomino { Left = "4", Top = "4", Right = "5" });
+        tiles.Add(new Triomino { Left = "3", Top = "4", Right = "4" });
+        tiles.Add(new Triomino { Left = "2", Top = "4", Right = "4" });
+        tiles.Add(new Triomino { Left = "1", Top = "4", Right = "4" });
+        tiles.Add(new Triomino { Left = "0", Top = "4", Right = "4" });
+        tiles.Add(new Triomino { Left = "3", Top = "3", Right = "5" });
+        tiles.Add(new Triomino { Left = "3", Top = "3", Right = "4" });
+        tiles.Add(new Triomino { Left = "2", Top = "3", Right = "3" });
+        tiles.Add(new Triomino { Left = "1", Top = "3", Right = "3" });
+        tiles.Add(new Triomino { Left = "0", Top = "3", Right = "3" });
+        tiles.Add(new Triomino { Left = "2", Top = "2", Right = "5" });
+        tiles.Add(new Triomino { Left = "2", Top = "2", Right = "4" });
+        tiles.Add(new Triomino { Left = "2", Top = "2", Right = "3" });
+        tiles.Add(new Triomino { Left = "1", Top = "2", Right = "2" });
+        tiles.Add(new Triomino { Left = "0", Top = "2", Right = "2" });
+        tiles.Add(new Triomino { Left = "1", Top = "1", Right = "5" });
+        tiles.Add(new Triomino { Left = "1", Top = "1", Right = "4" });
+        tiles.Add(new Triomino { Left = "1", Top = "1", Right = "3" });
+        tiles.Add(new Triomino { Left = "1", Top = "1", Right = "2" });
+        tiles.Add(new Triomino { Left = "0", Top = "1", Right = "1" });
+        tiles.Add(new Triomino { Left = "0", Top = "0", Right = "5" });
+        tiles.Add(new Triomino { Left = "0", Top = "0", Right = "4" });
+        tiles.Add(new Triomino { Left = "0", Top = "0", Right = "3" });
+        tiles.Add(new Triomino { Left = "0", Top = "0", Right = "2" });
+        tiles.Add(new Triomino { Left = "0", Top = "0", Right = "1" });
+        // Singles
+        tiles.Add(new Triomino { Left = "3", Top = "4", Right = "5" });
+        tiles.Add(new Triomino { Left = "2", Top = "4", Right = "5" });
+        tiles.Add(new Triomino { Left = "1", Top = "4", Right = "5" });
+        tiles.Add(new Triomino { Left = "0", Top = "4", Right = "5" });
+        tiles.Add(new Triomino { Left = "2", Top = "3", Right = "5" });
+        tiles.Add(new Triomino { Left = "1", Top = "3", Right = "5" });
+        tiles.Add(new Triomino { Left = "0", Top = "3", Right = "5" });
+        tiles.Add(new Triomino { Left = "2", Top = "3", Right = "4" });
+        tiles.Add(new Triomino { Left = "1", Top = "3", Right = "4" });
+        tiles.Add(new Triomino { Left = "0", Top = "3", Right = "4" });
+        tiles.Add(new Triomino { Left = "1", Top = "2", Right = "5" });
+        tiles.Add(new Triomino { Left = "0", Top = "2", Right = "5" });
+        tiles.Add(new Triomino { Left = "0", Top = "1", Right = "5" });
+        tiles.Add(new Triomino { Left = "1", Top = "2", Right = "4" });
+        tiles.Add(new Triomino { Left = "0", Top = "2", Right = "4" });
+        tiles.Add(new Triomino { Left = "0", Top = "1", Right = "4" });
+        tiles.Add(new Triomino { Left = "1", Top = "2", Right = "3" });
+        tiles.Add(new Triomino { Left = "0", Top = "2", Right = "3" });
+        tiles.Add(new Triomino { Left = "0", Top = "1", Right = "3" });
+        tiles.Add(new Triomino { Left = "0", Top = "1", Right = "2" });
+        // Triples
+        tiles.Add(new Triomino { Left = "5", Top = "5", Right = "5" });
+        tiles.Add(new Triomino { Left = "4", Top = "4", Right = "4" });
+        tiles.Add(new Triomino { Left = "3", Top = "3", Right = "3" });
+        tiles.Add(new Triomino { Left = "2", Top = "2", Right = "2" });
+        tiles.Add(new Triomino { Left = "1", Top = "1", Right = "1" });
+        tiles.Add(new Triomino { Left = "0", Top = "0", Right = "0" });
+    }
+}
