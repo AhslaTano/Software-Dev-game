@@ -1,0 +1,70 @@
+In Triomino
+ public int GetScore(){
+     return data.score;
+ }
+In tiles/TTile
+public bool isPlacedCorrectly = false; // Track if it's placed correctly 
+if (!isPlacedCorrectly) { ReturnTileToHand(selectedTile); }// in mouse up 
+private void OnCollisionEnter2D(Collision2D collision)
+{
+    Triomino collidingTile = collision.gameObject.GetComponent<Triomino>();
+
+    if (collidingTile != null && IsValidMove(selectedTile, collidingTile))
+    {
+        ValidFlickerEffect();
+    }
+    else
+    {
+        InvalidFlickerEffect();
+    }
+
+    if (free)
+    {
+        Debug.Log("I am free and colliding");
+
+        // Set the target to the collided object's position
+        target = (Vector2)collision.gameObject.transform.position - collision.collider.offset;
+
+        if (!otherColliders.Contains(collision.collider))
+        {
+            otherColliders.Add(collision.collider);
+        }
+
+        gameObject.GetComponent<Rigidbody2D>().bodyType = RigidbodyType2D.Kinematic;
+        ValidFlickerEffect();
+    }
+    else
+    {
+        Debug.Log("I am stationary and colliding");
+
+        // Setup the activeCollider on the other tile
+        Tiles otherTile = collision.gameObject.GetComponent<Tiles>();
+        if (otherTile != null && !otherTile.colliders.Contains(activeCollider))
+        {
+            otherTile.activeCollider = collision.collider;
+        }
+
+        gameObject.GetComponent<Rigidbody2D>().bodyType = RigidbodyType2D.Kinematic;
+        InvalidFlickerEffect();
+    }
+}
+public bool IsValidMove(Triomino selectedTile, Triomino collidingTile)
+{
+    if (selectedTile == null || collidingTile == null) return false;
+
+    // Compare only the touching sides using TMP_Text values
+    bool isMatch =
+        (selectedTile.leftText == collidingTile.rightText) && (selectedTile.topText == collidingTile.topText) || // left 
+        (selectedTile.rightText == collidingTile.leftText) && (selectedTile.topText == collidingTile.topText) || // right
+        (selectedTile.rightText == collidingTile.leftText) && (selectedTile.leftText == collidingTile.rightText) || // Bottom
+        (selectedTile.topText == collidingTile.topText); // Top
+
+    Debug.Log($"Valid move? {isMatch} | {selectedTile.leftText}-{collidingTile.rightText}, " +
+              $"{selectedTile.rightText}-{collidingTile.leftText}, " +
+              $"{selectedTile.topText}-{collidingTile.topText}");
+    // Calculate total score when correctly placed
+    int totalScore = 0;
+    totalScore = selectedTile.GetScore();
+    isPlacedCorrectly = true; // set bool to not return tile to hand when mouse released. 
+    return isMatch;
+}
