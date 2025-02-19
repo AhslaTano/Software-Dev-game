@@ -1,0 +1,47 @@
+// Skeleton script idea for checking hexagon shape. +50 to tile sum for score
+public class HexagonChecker : MonoBehaviour
+{
+   private List<Vector2Int> hexagonOffsets = new List<Vector2Int>
+    {
+        new Vector2Int(0, 1),  // Top
+        new Vector2Int(1, 0),  // Right
+        new Vector2Int(1, -1), // Bottom-right
+        new Vector2Int(0, -1), // Bottom
+        new Vector2Int(-1, 0), // Left
+        new Vector2Int(-1, 1)  // Top-left
+    };
+
+    private Dictionary<Vector2Int, Triomino> placedTiles = new Dictionary<Vector2Int, Triomino>();
+
+    public bool CheckHexagonFormation(Triomino newTile)
+    {
+        // Convert tile position to grid coordinates
+        Vector2Int tilePosition = GetTileGridPosition(newTile);
+
+        // Store the new tile
+        placedTiles[tilePosition] = newTile;
+
+        // Check if placing this tile completes a hexagon
+        foreach (var offset in hexagonOffsets)
+        {
+            Vector2Int potentialHexCenter = tilePosition - offset;
+
+            // Check if the six surrounding positions are occupied
+            bool isHexagon = hexagonOffsets.All(o => placedTiles.ContainsKey(potentialHexCenter + o));
+
+            if (isHexagon)
+            {
+                Debug.Log($"Hexagon formed with tiles around {potentialHexCenter}!");
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private Vector2Int GetTileGridPosition(Triomino tile)
+    {
+        // Convert world position to grid coordinates (adjust for snapping)
+        return new Vector2Int(Mathf.RoundToInt(tile.transform.position.x), Mathf.RoundToInt(tile.transform.position.y));
+    }
+}
