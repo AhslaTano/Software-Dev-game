@@ -1,0 +1,67 @@
+Skeleton script idea for checking Bridge move. +40 to tile sum for score
+public class BridgeMoveChecker : MonoBehaviour
+{
+    private Dictionary<Vector2Int, Triomino> placedTiles = new Dictionary<Vector2Int, Triomino>();
+
+    private List<Vector2Int> flatSideOffsets = new List<Vector2Int>
+    {
+        new Vector2Int(1, 0),   // Right flat side
+        new Vector2Int(-1, 0),  // Left flat side
+        new Vector2Int(0, -1)   // Bottom flat side
+    };
+
+    private List<Vector2Int> tipOffsets = new List<Vector2Int>
+    {
+        new Vector2Int(0, 1),   // Top tip
+        new Vector2Int(1, -1),  // Bottom-right tip
+        new Vector2Int(-1, -1)  // Bottom-left tip
+    };
+
+    public bool IsBridgeMove(Triomino newTile)
+    {
+        Vector2Int tilePosition = GetTileGridPosition(newTile);
+
+        int emptySpaces = 0;
+        int validConnections = 0;
+
+        // Check flat sides for empty space
+        foreach (var offset in flatSideOffsets)
+        {
+            Vector2Int adjacentPosition = tilePosition + offset;
+            if (!placedTiles.ContainsKey(adjacentPosition))
+            {
+                emptySpaces++;
+            }
+        }
+
+        // Check for valid number-matching connections
+        foreach (var offset in flatSideOffsets.Concat(tipOffsets))
+        {
+            Vector2Int adjacentPosition = tilePosition + offset;
+            if (placedTiles.ContainsKey(adjacentPosition))
+            {
+                Triomino adjacentTile = placedTiles[adjacentPosition];
+
+                if (IsValidMove(newTile, adjacentTile)) 
+                {
+                    validConnections++;
+                }
+            }
+        }
+
+        // A bridge move requires 1 or 2 empty spaces and at least 2 valid connections
+        return (emptySpaces >= 1 && emptySpaces <= 2) && (validConnections >= 2);
+    }
+
+    private Vector2Int GetTileGridPosition(Triomino tile)
+    {
+        return new Vector2Int(Mathf.RoundToInt(tile.transform.position.x), Mathf.RoundToInt(tile.transform.position.y));
+    }
+
+    private bool IsValidMove(Triomino selectedTile, Triomino collidingTile)
+    {
+        return (selectedTile.data.left == collidingTile.data.right) ||
+               (selectedTile.data.right == collidingTile.data.left) ||
+               (selectedTile.data.top == collidingTile.data.top);
+    }
+}
