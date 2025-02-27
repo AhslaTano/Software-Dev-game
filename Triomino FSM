@@ -1,0 +1,447 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Reflection;
+using TMPro;
+using Unity.VisualScripting;
+using UnityEngine;
+
+public class Triomino : MonoBehaviour
+{
+    public TriominoObject data;
+    private SpriteRenderer sprite;
+    public TMP_Text topText;
+    public TMP_Text leftText;
+    public TMP_Text rightText;
+    public Vector3 offset; // To track the mouse offset while dragging
+    private bool selected;
+    public bool isDragging;
+    private bool busy;
+
+    //Collision
+    private float speed = 10.0f;
+    public bool free;// not collided
+    public Collider2D[] colliders;
+    public Collider2D activeCollider;
+    public Collider2D otherCollider;
+    public List<Collider2D> otherColliders = new List<Collider2D>(); // Supports multiple colliders during snapping
+    public bool isPlacedCorrectly;
+    public bool targetAcquired;
+    public Vector2 target;
+
+    [Header("Flicker Effect")]
+    [SerializeField] private Color validColor = Color.green; // Color to flicker to valid color
+    [SerializeField] private Color invalidColor = Color.red; // Color to flicker to invalid color
+    [SerializeField] private float flickerDuration = 0.1f; // Duration of each flicker
+    [SerializeField] private int flickerCount = 3; // Number of flickers
+    private SpriteRenderer spriteRenderer;  // Reference to the tile's sprite renderer
+                                            //private MeshRenderer meshRenderer; // Reference to the tile's mesh renderer
+                                            //private Material material; // Material of the MeshRenderer
+    private Color originalColor; // Store the original color of the material
+
+    private void Awake()
+    {
+        spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer != null)
+        {
+            originalColor = Color.white;
+        }
+    }
+    private void Start()
+    {
+        //sprite = GetComponent<SpriteRenderer>();
+        topText.text = data.top.ToString();
+        leftText.text = data.left.ToString();
+        rightText.text = data.right.ToString();
+        isDragging = false;
+        isPlacedCorrectly = false;
+        targetAcquired = false;
+        busy = false;
+        activeCollider = null;
+        otherCollider = null;
+        free = false;
+        Physics.IgnoreLayerCollision(6, 7);
+        Physics.IgnoreLayerCollision(6, 6);
+    }
+
+    private void Update()
+    {
+        if (isDragging)
+        {
+            //OnMouseDrag();
+
+            if (Input.GetKeyDown(KeyCode.J)) // J key for 120 degrees left
+            {
+                RotateTriomino(120); // Rotate left
+            }
+            else if (Input.GetKeyDown(KeyCode.L)) // L key for 120 degrees right
+            {
+                RotateTriomino(-120); // Rotate right
+            }
+        }
+
+        if (Input.GetMouseButtonDown(1) && isDragging)
+        {
+            transform.Rotate(0, 0, 180);
+            //rotate tile 180
+        }
+        /*if (free && activeCollider != null && otherColliders.Count > 0)
+        {
+            float step = speed * Time.deltaTime;
+
+            // Move sprite towards the target location
+            Vector2 combinedOffset = Vector2.zero;
+            foreach (Collider2D col in otherColliders)
+            {
+                combinedOffset += col.offset;
+            }
+            combinedOffset /= otherColliders.Count; // Average the offset if multiple colliders
+
+            transform.position = Vector2.MoveTowards(
+                (Vector2)transform.position + activeCollider.offset,
+                target,
+                step
+            ) + combinedOffset;
+
+            if (Vector2.Distance((Vector2)transform.position + activeCollider.offset, target) < 0.01f)
+            {
+                Debug.Log("I arrived");
+                free = false;
+                activeCollider = null;
+                otherColliders.Clear();
+            }
+        }*/
+        if (free && activeCollider != null && otherCollider != null)
+        {
+            //Debug.Log("Moving");
+            float step = speed * Time.deltaTime;
+
+            // move sprite towards the target location
+            transform.position = Vector2.MoveTowards(activeCollider.transform.position, target, step) + new Vector2(transform.position.x - activeCollider.transform.position.x, transform.position.y - activeCollider.transform.position.y);
+            if (new Vector2(activeCollider.transform.position.x, activeCollider.transform.position.y) == target)
+            //if(transform.position + new Vector3(activeCollider.offset.x, activeCollider.offset.y, transform.position.z) == new Vector3(target.x, target.y, transform.position.z))
+            {
+                Debug.Log("I ARRIVED!");
+                free = false;
+
+                activeCollider = null;
+                otherCollider = null;
+            }
+        }
+    }
+
+    // Function to rotate the Triomino by a specified amount (in degrees)
+    private void RotateTriomino(float angle)
+    {
+        transform.Rotate(0, 0, angle);  // Rotate on the Z-axis by the specified angle
+        if (angle > 0)
+        {
+            RotateLeft();
+        }
+        else
+        {
+            RotateRight();
+        }
+        Debug.Log("M= " + data.top + " L= " + data.left + " R= " + data.right);
+        //updatePips(); // This doesn't need to be here. Update pips only updates the values when loading data.
+    }
+
+    private void RotateRight() // Updates the variable values if rotating clockwise.
+    {
+        // When rotating clockwise, the middle moves to the right, the right moves to the bottom, and the left moves to the middle
+        Debug.Log("Rotating clockwise");
+        int temp = data.top;
+        data.top = data.left;
+        data.left = data.right;
+        data.right = temp;
+    }
+
+    private void RotateLeft() // Updates the variable values if rotating counterclockwise.
+    {
+        // When rotating counterclockwise, the middle moves to the left, the left moves to the bottom, and the right moves to the middle
+        Debug.Log("Rotating counterclockwise");
+        int temp = data.top;
+        data.top = data.right;
+        data.right = data.left;
+        data.left = temp;
+    }
+    private void OnMouseDown()
+    {
+        Vector3 mousePosition = Input.mousePosition;
+        mousePosition.z = Camera.main.WorldToScreenPoint(transform.position).z;
+        Vector3 worldPosition = Camera.main.ScreenToWorldPoint(mousePosition);
+        offset = transform.position - worldPosition;
+        HandManager handManager = FindObjectOfType<HandManager>();
+        handManager.selectedTile = this.gameObject;
+        isDragging = true;
+        free = true;
+        Debug.Log("Picked up a tile");
+    }
+    private void OnMouseDrag()
+    {
+        if (isDragging)
+        {
+            // Update the tile's position to follow the mouse, maintaining the offset
+            Vector3 mousePosition = Input.mousePosition;
+            mousePosition.z = Camera.main.WorldToScreenPoint(transform.position).z;
+            Vector3 worldPosition = Camera.main.ScreenToWorldPoint(mousePosition);
+            transform.position = worldPosition + offset;
+        }
+    }
+
+    private void OnMouseUp()
+    {
+        Debug.Log("Placing");
+        bool first = FirstTileCheck();
+        if (!isPlacedCorrectly && !first)
+        {
+            Debug.Log("Return to Hand");
+            ReturnToHand();
+        }
+        if (isDragging)
+        {
+            GameManager gameManager = FindObjectOfType<GameManager>();
+            // Snap the tile to the nearest grid position or board
+            /*Vector3 snappedPosition = new Vector3(
+                Mathf.Round(transform.position.x),
+                Mathf.Round(transform.position.y),
+                transform.position.z);
+
+            transform.position = snappedPosition;*/
+            isDragging = false;
+            RemoveFromHand();
+            gameManager.TilePlaced(this);
+
+            Debug.Log($"Tile placed at: {transform.position}");
+        }
+    }
+    public void OnCollisionEnter2D(Collision2D collision)
+    {
+        //if (IsValidMove(this, collision.gameObject.GetComponent<Triomino>()))
+        if (CompareSides(collision.otherCollider, collision.collider))
+        {
+            StartCoroutine(ValidFlickerEffect());
+            isPlacedCorrectly = true;
+            Debug.Log("Accepted");
+        }
+        else
+        {
+            StartCoroutine(InvalidFlickerEffect());
+            //ReturnToHand();
+            //isDragging = false;
+            isPlacedCorrectly = false;
+            Debug.Log("Denied");
+            return;
+        }
+
+        if (collision.otherCollider.gameObject.GetComponent<Rigidbody2D>().bodyType == RigidbodyType2D.Dynamic && !busy)
+        {
+            if (free)
+            {
+                busy = true;
+                Debug.Log(gameObject.name + " I am free and colliding");
+                target = collision.transform.position;
+                targetAcquired = true;
+                otherCollider = collision.collider;
+                collision.otherCollider.gameObject.GetComponent<Rigidbody2D>().bodyType = RigidbodyType2D.Kinematic;
+                activeCollider = collision.otherCollider;
+                collision.collider.gameObject.GetComponent<Rigidbody2D>().bodyType = RigidbodyType2D.Kinematic;
+                busy = false;
+            }
+        }
+    }
+    public bool IsValidMove(Triomino selectedTile, Triomino collidingTile)
+    {
+        if (selectedTile == null || collidingTile == null) return false;
+
+        // Compare only the touching sides using TMP_Text values
+        bool isMatch =
+            (selectedTile.leftText == collidingTile.rightText) && (selectedTile.topText == collidingTile.topText) || // left 
+            (selectedTile.rightText == collidingTile.leftText) && (selectedTile.topText == collidingTile.topText) || // right
+            (selectedTile.rightText == collidingTile.leftText) && (selectedTile.leftText == collidingTile.rightText) || // Bottom
+            (selectedTile.topText == collidingTile.topText); // Top
+
+        Debug.Log($"Valid move? {isMatch} | {selectedTile.leftText}-{collidingTile.rightText}, " +
+                  $"{selectedTile.rightText}-{collidingTile.leftText}, " +
+                  $"{selectedTile.topText}-{collidingTile.topText}");
+        // Calculate total score when correctly placed
+        int totalScore = 0;
+        totalScore = selectedTile.data.score;
+        //isPlacedCorrectly = true; // set bool to not return tile to hand when mouse released. 
+        return isMatch;
+    }
+    public void ReturnToHand()
+    {
+        isDragging = false;
+        free = false;
+        HandManager handManager = FindObjectOfType<HandManager>();
+        if (handManager != null)
+        {
+            handManager.UpdateHandVisuals();
+        }
+        //transform.position = new Vector3(0, 0 , 0);
+    }
+    public void RemoveFromHand()
+    {
+        HandManager handManager = FindObjectOfType<HandManager>();
+        if (handManager != null)
+        {
+            handManager.RemoveSelectedTile(this.gameObject);
+        }
+    }
+    private IEnumerator ValidFlickerEffect()
+    {
+        Debug.Log("Flicker Running");
+        for (int i = 0; i < flickerCount; i++)
+        {
+            // Change to damage color
+            spriteRenderer.color = validColor;
+            yield return new WaitForSeconds(flickerDuration);
+
+            // Reset to original color
+            spriteRenderer.color = originalColor;
+            yield return new WaitForSeconds(flickerDuration);
+        }
+    }
+
+    private IEnumerator InvalidFlickerEffect()
+    {
+        for (int i = 0; i < flickerCount; i++)
+        {
+            // Change to damage color
+            spriteRenderer.color = invalidColor;
+            yield return new WaitForSeconds(flickerDuration);
+
+            // Reset to original color
+            spriteRenderer.color = originalColor;
+            yield return new WaitForSeconds(flickerDuration);
+        }
+    }
+    private bool FirstTileCheck()
+    {
+        GameManager gameManager = FindObjectOfType<GameManager>();
+        return gameManager.FirstTile();
+    }
+    public bool CompareSides(Collider2D thisCollider, Collider2D otherCollider)
+    {
+        // Determine which sides are being compared based on the colliders
+        int thisSideIndex = GetSideIndexForCollider(thisCollider);
+        int otherSideIndex = GetSideIndexForCollider(otherCollider);
+
+        // Get the pip pairs for both sides
+        var thisSidePips = GetSidePips(thisSideIndex);
+        var otherSidePips = otherCollider.GetComponentInParent<Triomino>().GetSidePips(otherSideIndex); // Access the Triomino on the other piece
+
+        // Compare the two sides' pip pairs.
+        Debug.Log(thisSidePips + " " + otherSidePips);
+        return (thisSidePips.Item1 == otherSidePips.Item1 && thisSidePips.Item2 == otherSidePips.Item2);
+    }
+
+    // Helper function to get the correct side based on the collider
+    private int GetSideIndexForCollider(Collider2D collider)
+    {
+        // You can map each collider to a side (top, left, right)
+        if (collider == collider.GetComponentInParent<Triomino>().colliders[0]) return 0; // Left side
+        if (collider == collider.GetComponentInParent<Triomino>().colliders[1]) return 1; // Right side
+        if (collider == collider.GetComponentInParent<Triomino>().colliders[2]) return 2; // Bottom/Middle side
+
+        return -1; // Error value
+    }
+
+    // Get the pip pair for a given side index
+    private (int, int) GetSidePips(int sideIndex)
+    {
+        // Return the pip pair for the specified side based on current rotation
+        if (sideIndex == 0) return (data.top, data.left);   // Top-left side
+        if (sideIndex == 1) return (data.top, data.right); // Top-right side
+        if (sideIndex == 2) return (data.left, data.right);  // Right-left side
+
+        return (-1, -1); // Default error value
+    }
+    /// <summary>
+    /// FSM
+    /// </summary>
+    public enum StateMachine { InHand, IsSelected, OnBoard }
+    public StateMachine currentState;
+
+    private void FixedUpdate()
+    {
+        switch (currentState)
+        {
+            case StateMachine.InHand:
+                HandleInHand();
+                break;
+            case StateMachine.IsSelected:
+                HandleIsSelected();
+                break;
+            case StateMachine.OnBoard:
+                HandleOnBoard();
+                break;
+        }
+    }
+
+    // Change State Method
+    public void ChangeState(StateMachine newState)
+    {
+        currentState = newState;
+
+        switch (newState)
+        {
+            case StateMachine.InHand:
+                DisableChildColliders();
+                break;
+            case StateMachine.IsSelected:
+                EnableChildColliders();
+                break;
+            case StateMachine.OnBoard:
+                break;
+        }
+    }
+
+    // FSM State Methods
+    private void HandleInHand()
+    {
+        if (Input.GetMouseButtonDown(0) && RaycastHitSelf())
+        {
+            ChangeState(StateMachine.IsSelected);
+        }
+    }
+
+    private void HandleIsSelected()
+    {
+        if (Input.GetMouseButtonUp(0))
+        {
+            if (isPlacedCorrectly) { ChangeState(StateMachine.OnBoard)};
+            else {ChangeState(StateMachine.InHand); } // Return to hand if not placed correctly
+        }
+    }
+
+    private void HandleOnBoard()
+    {
+        // Prevent further dragging or selection
+        GetComponent<BoxCollider2D>().enabled = false;
+    }
+
+    // Utility Methods
+    private bool RaycastHitSelf()
+    {
+        RaycastHit2D hit = Physics2D.Raycast(Camera.main.ScreenToWorldPoint(Input.mousePosition), Vector2.zero);
+        return hit.collider != null && hit.collider.gameObject == gameObject;
+    }
+
+    private void DisableChildColliders()
+    {
+        foreach (Transform child in transform)
+        {
+            child.gameObject.GetComponent<Collider2D>().enabled = false;
+        }
+    }
+
+    private void EnableChildColliders()
+    {
+        foreach (Transform child in transform)
+        {
+            child.gameObject.GetComponent<Collider2D>().enabled = true;
+        }
+    }
+}
