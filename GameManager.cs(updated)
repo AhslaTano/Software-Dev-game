@@ -1,0 +1,134 @@
+using System.Collections;
+using System.Collections.Generic;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class GameManager : MonoBehaviour
+{
+    [SerializeField] private HandManager handManager;
+    [SerializeField] private DeckManager deckManager;
+    private WellDrawMenu wellDraw;
+    public Button draw;
+    public Camera mainCamera;
+    public GameObject selectedTile;
+    private List<Triomino> board = new List<Triomino>();
+    private int handCount;// placed tiles on the board
+    public int playerTurn;
+    private int p1Score;
+    public TMP_Text player1Score;
+    private int p2Score;
+    public TMP_Text player2Score;
+    // for no valid moves 
+    private bool p1Stuck = false;
+    private bool p2Stuck = false;
+
+    // Start is called before the first frame update
+    void Start()
+    {
+        wellDraw = FindObjectOfType<WellDrawMenu>(); // Get well manager reference
+        handCount = 9;
+        playerTurn = 1;
+        p1Score = 0;
+        p2Score = 0;
+        UpdateScoreboard();
+        for (int i = 0; i < handCount; i++)
+        {
+            deckManager.P1DrawTriomino(handManager);
+            deckManager.P2DrawTriomino(handManager);
+        }
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+
+    }
+    public void dealTiles(int numToDeal)
+    {
+        if (playerTurn == 1)
+        {
+            for (int i = 0; i < numToDeal; i++)
+            {
+                deckManager.P1DrawTriomino(handManager);
+            }
+        }
+        else if (playerTurn == 2)
+        {
+            for (int i = 0; i < numToDeal; i++)
+            {
+                deckManager.P2DrawTriomino(handManager);
+            }
+        }
+    }
+    public bool FirstTile()
+    {
+        Debug.Log("First Tile Check");
+        if (board.Count == 0)
+        {
+            Debug.Log("First Tile");
+            return true;
+        }
+        return false;
+    }
+    public void TilePlaced(Triomino tile)
+    {
+        board.Add(tile);
+        tile.free = false;
+        tile.GetComponent<BoxCollider2D>().enabled = false;
+        if (playerTurn == 1) 
+        {
+            p1Score += tile.data.score;
+            p1Stuck = false; // Reset stuck status if a move is made
+            playerTurn = 2;
+        }
+        else if (playerTurn == 2)
+        {
+            p2Score += tile.data.score;
+            p2Stuck = false; // Reset stuck status if a move is made
+            playerTurn = 1;
+        }
+        Debug.Log("Tile Added");
+    }
+    public void UpdateScoreboard()
+    {
+        player1Score.text = p1Score.ToString();
+        player2Score.text = p2Score.ToString();
+    }
+
+    public void ScorePenalty(int penaltyAmount)
+    {
+        if (playerTurn == 1)
+        {
+            p1Score -= penaltyAmount;
+        }
+        else if (playerTurn == 2)
+        {
+            p2Score -= penaltyAmount;
+        }
+        Debug.Log($"Player {playerTurn} received a penalty of {penaltyAmount} points.");
+        UpdateScoreboard();
+    }
+
+    public void PlayerCannotMove()
+    {
+        if (playerTurn == 1)
+        {
+            p1Stuck = true;
+            playerTurn = 2;
+        }
+        else
+        {
+            p2Stuck = true;
+            playerTurn = 1;
+        }
+
+        Debug.Log($"Player {playerTurn} is stuck and skips their turn.");
+
+        // If both players are stuck, end the round
+        if (p1Stuck && p2Stuck)
+        {
+            wellDraw.EndRound();
+        }
+    }
+}
