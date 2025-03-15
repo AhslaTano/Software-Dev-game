@@ -1,0 +1,86 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+
+public class WellDrawMenu : MonoBehaviour
+{
+    public bool roundEnded { get; set; }
+    private int drawCount = 0;
+    private int maxDrawAttempts = 3; // Maximum draws allowed from the well
+
+    public Button endRoundButton;
+    public Button drawButton;
+    public GameObject endRoundMenuUI;
+
+    private DeckManager deckManager;
+    private HandManager handManager;
+    private GameManager gameManager;
+
+    void Start()
+    {
+        roundEnded = false;
+        deckManager = FindObjectOfType<DeckManager>();
+        handManager = FindObjectOfType<HandManager>();
+        gameManager = FindObjectOfType<GameManager>();
+
+        if (drawButton != null)
+            drawButton.onClick.AddListener(DrawFromWell);
+
+        if (endRoundButton != null)
+            endRoundButton.onClick.AddListener(EndRound);
+    }
+
+    public void DrawFromWell()
+    {
+        if (drawCount == maxDrawAttempts)
+        {
+            Debug.LogWarning("Player cannot draw any more tiles.");
+            Debug.LogWarning("None of your 3 tiles could be placed. 25 point penalty!");
+            gameManager.ScorePenalty(25);
+            return;
+        }
+        if (drawCount > maxDrawAttempts)
+        {
+            Debug.LogWarning("Player cannot draw any more tiles.");
+            gameManager.PlayerCannotMove(); // Skip turn if out of draw attempts
+            return;
+        }
+
+        if (deckManager == null || deckManager.deck.Count == 0)
+        {
+            Debug.LogWarning("The deck is empty! 10 point penalty applied.");
+            gameManager.ScorePenalty(10);
+            gameManager.PlayerCannotMove(); // Skip turn due to empty well
+            return;
+        }
+
+        int currentPlayer = gameManager.playerTurn;
+        int randomIndex = UnityEngine.Random.Range(0, deckManager.deck.Count);
+        TriominoObject drawnTile = deckManager.deck[randomIndex];
+        deckManager.deck.RemoveAt(randomIndex);
+
+        if (currentPlayer == 1)
+        {
+            handManager.DrawToHandP1(drawnTile);
+            Debug.Log($"Player 1 drew tile: {drawnTile.name}");
+        }
+        else
+        {
+            handManager.DrawToHandP2(drawnTile);
+            Debug.Log($"Player 2 drew tile: {drawnTile.name}");
+        }
+
+        handManager.UpdateHandVisuals();
+        gameManager.ScorePenalty(5); // 5 point penalty for drawing
+        drawCount++;
+    }
+
+    public void EndRound()
+    {
+        Debug.LogWarning("Both players are stuck. Ending round.");
+        roundEnded = true;
+        endRoundMenuUI.SetActive(false);
+    }
+}
