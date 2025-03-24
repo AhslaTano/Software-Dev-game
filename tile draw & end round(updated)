@@ -12,6 +12,7 @@ public class WellDrawMenu : MonoBehaviour
 
     public Button endRoundButton;
     public Button drawButton;
+    public Button skipTurnButton; // New Skip Turn button
     public GameObject endRoundMenuUI;
 
     private DeckManager deckManager;
@@ -28,23 +29,23 @@ public class WellDrawMenu : MonoBehaviour
         if (drawButton != null)
             drawButton.onClick.AddListener(DrawFromWell);
 
+        if (skipTurnButton != null)
+            skipTurnButton.onClick.AddListener(SkipTurn);
+
         if (endRoundButton != null)
             endRoundButton.onClick.AddListener(EndRound);
+
+        skipTurnButton.gameObject.SetActive(false); // Hide Skip button initially
     }
 
     public void DrawFromWell()
     {
-        if (drawCount == maxDrawAttempts)
+        if (drawCount >= maxDrawAttempts)
         {
             Debug.LogWarning("Player cannot draw any more tiles.");
             Debug.LogWarning("None of your 3 tiles could be placed. 25 point penalty!");
             gameManager.ScorePenalty(25);
-            return;
-        }
-        if (drawCount > maxDrawAttempts)
-        {
-            Debug.LogWarning("Player cannot draw any more tiles.");
-            gameManager.PlayerCannotMove(); // Skip turn if out of draw attempts
+            ShowSkipTurnButton();
             return;
         }
 
@@ -52,7 +53,7 @@ public class WellDrawMenu : MonoBehaviour
         {
             Debug.LogWarning("The deck is empty! 10 point penalty applied.");
             gameManager.ScorePenalty(10);
-            gameManager.PlayerCannotMove(); // Skip turn due to empty well
+            ShowSkipTurnButton();
             return;
         }
 
@@ -75,6 +76,23 @@ public class WellDrawMenu : MonoBehaviour
         handManager.UpdateHandVisuals();
         gameManager.ScorePenalty(5); // 5 point penalty for drawing
         drawCount++;
+    }
+
+    public void SkipTurn()
+    {
+        Debug.Log($"Player {gameManager.playerTurn} skipped their turn.");
+
+        // Reset buttons for the next player
+        drawButton.gameObject.SetActive(true);
+        skipTurnButton.gameObject.SetActive(false);
+
+        gameManager.PlayerCannotMove(); // Pass turn to the next player
+    }
+
+    private void ShowSkipTurnButton()
+    {
+        drawButton.gameObject.SetActive(false);
+        skipTurnButton.gameObject.SetActive(true);
     }
 
     public void EndRound()
