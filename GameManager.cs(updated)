@@ -14,6 +14,7 @@ public class GameManager : MonoBehaviour
     public GameObject selectedTile;
     private List<Triomino> board = new List<Triomino>();
     private int handCount;// placed tiles on the board
+    public Button unstuckButton; // New unstuck button
     public int playerTurn;
     private int p1Score;
     public TMP_Text player1Score;
@@ -37,6 +38,9 @@ public class GameManager : MonoBehaviour
             deckManager.P1DrawTriomino(handManager);
             deckManager.P2DrawTriomino(handManager);
         }
+
+        unstuckButton.gameObject.SetActive(false); // Hide unstuck button initially
+        unstuckButton.onClick.AddListener(CheckUnstuck); // Assign button function
     }
 
     // Update is called once per frame
@@ -110,6 +114,22 @@ public class GameManager : MonoBehaviour
         UpdateScoreboard();
     }
 
+     public void CheckUnstuck()
+    {
+        bool hasMove = CheckValidMovesForPlayer(playerTurn);
+
+        if (hasMove)
+        {
+            Debug.Log($"Player {playerTurn} found a move and is unstuck.");
+        }
+        else
+        {
+            Debug.Log($"Player {playerTurn} is still stuck. Skipping turn.");
+            unstuckButton.gameObject.SetActive(false);
+            PlayerCannotMove();
+        }
+    }
+
     public void PlayerCannotMove()
     {
         if (playerTurn == 1)
@@ -123,7 +143,16 @@ public class GameManager : MonoBehaviour
             playerTurn = 1;
         }
 
-        Debug.Log($"Player {playerTurn} is stuck and skips their turn.");
+        Debug.Log($"Player {playerTurn} is stuck. Waiting for unstuck or skipping turn.");
+
+        // Show the unstuck button for the stuck player
+        unstuckButton.gameObject.SetActive(true);
+
+        // If both players are stuck, end the round
+        if (p1Stuck && p2Stuck)
+        {
+            wellDraw.EndRound();
+        }
 
         // If both players are stuck, end the round
         if (p1Stuck && p2Stuck)
