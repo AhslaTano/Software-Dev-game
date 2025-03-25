@@ -7,7 +7,9 @@ using TMPro;
 public class WellDrawMenu : MonoBehaviour
 {
     public bool roundEnded { get; set; }
-    private int drawCount = 0;
+    private int drawCount = 0; // placeholder count for conditionals
+    private int p1drawCount = 0; // player 1 draw count
+    private int p2drawCount = 0; // player 2 draw count
     private int maxDrawAttempts = 3; // Maximum draws allowed from the well
 
     public Button endRoundButton;
@@ -40,6 +42,9 @@ public class WellDrawMenu : MonoBehaviour
 
     public void DrawFromWell()
     {
+        if(currentPlayer == 1)
+        {drawCount = p1drawCount;}
+        else{drawCount = p2drawCount;}
         if (drawCount >= maxDrawAttempts)
         {
             Debug.LogWarning("Player cannot draw any more tiles.");
@@ -66,16 +71,17 @@ public class WellDrawMenu : MonoBehaviour
         {
             handManager.DrawToHandP1(drawnTile);
             Debug.Log($"Player 1 drew tile: {drawnTile.name}");
+            p1drawCount++
         }
         else
         {
             handManager.DrawToHandP2(drawnTile);
             Debug.Log($"Player 2 drew tile: {drawnTile.name}");
+            p2drawCount++;
         }
 
         handManager.UpdateHandVisuals();
         gameManager.ScorePenalty(5); // 5 point penalty for drawing
-        drawCount++;
     }
 
     public void SkipTurn()
