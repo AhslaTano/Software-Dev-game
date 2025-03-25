@@ -116,7 +116,7 @@ public class GameManager : MonoBehaviour
 
      public void CheckUnstuck()
     {
-        bool hasMove = CheckValidMovesForPlayer(playerTurn);
+        bool hasMove = true;
 
         if (hasMove)
         {
