@@ -1,0 +1,78 @@
+private void CheckRoundEnd()
+{
+    bool allPlayersStuck = hands.All(h => !h.GetComponent<HandManager>().HasValidMove());
+    bool anyPlayerEmpty = hands.Any(h => h.GetComponent<HandManager>().IsHandEmpty());
+
+    if (anyPlayerEmpty)
+    {
+        EndRoundWithWinner();
+    }
+    else if (allPlayersStuck)
+    {
+        EndRoundWithStalemate();
+    }
+}
+
+private void EndRoundWithWinner()
+{
+    HandManager winningHand = hands.First(h => h.GetComponent<HandManager>().IsHandEmpty()).GetComponent<HandManager>();
+    int bonus = 25;
+
+    foreach (var hand in hands)
+    {
+        if (hand.GetComponent<HandManager>() != winningHand)
+        {
+            int value = hand.GetComponent<HandManager>().GetTotalPipValue();
+            bonus += value;
+        }
+    }
+
+    winningHand.playerData.score += bonus;
+    ProceedToNextRound();
+}
+
+private void EndRoundWithStalemate()
+{
+    List<(HandManager hand, int total)> scores = hands
+        .Select(h => h.GetComponent<HandManager>())
+        .Select(h => (h, h.GetTotalPipValue()))
+        .ToList();
+
+    int lowestTotal = scores.Min(x => x.total);
+    var lowestHand = scores.First(x => x.total == lowestTotal).hand;
+
+    int bonus = scores.Where(x => x.hand != lowestHand)
+                      .Sum(x => x.total - lowestTotal);
+
+    lowestHand.playerData.score += bonus;
+    ProceedToNextRound();
+}
+
+private void ProceedToNextRound()
+{
+    if (hands.Any(h => h.GetComponent<HandManager>().playerData.score >= 400))
+    {
+        isFinalRound = true;
+    }
+
+    if (isFinalRound && roundHasEnded)
+    {
+        DeclareWinner();
+    }
+    else
+    {
+        //SetupNextRound
+    }
+}
+
+private void DeclareWinner()
+{
+    var winningPlayer = hands
+        .Select(h => h.GetComponent<HandManager>())
+        .OrderByDescending(h => h.playerData.score)
+        .First();
+
+    Debug.Log($"Winner is {winningPlayer.playerData.name} with {winningPlayer.playerData.score} points!");
+    // Show end screen, etc.
+}
+
